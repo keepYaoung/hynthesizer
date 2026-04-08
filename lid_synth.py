@@ -79,6 +79,11 @@ _bpm          = 120.0
 _rhythm_phase = 0.0
 _beat_flash   = False      # 박자 시각 피드백용
 
+# 웨이브폼 시각화용 링버퍼
+_WAVE_BUF_SIZE = 2048
+_wave_buf      = np.zeros(_WAVE_BUF_SIZE, dtype=np.float32)
+_wave_buf_pos  = 0
+
 
 # ══════════════════════════════════════════════════════════
 # 피치 변환
@@ -213,7 +218,20 @@ def audio_callback(outdata, frames, time_info, status):
         _xfade_pos += n
 
     # ── 최종 클립 ─────────────────────────────────────────
-    outdata[:, 0] = np.clip(outdata[:, 0], -1.0, 1.0).astype(np.float32)
+    outdata[:, 0] = np.clip(outdata[:, 0], -1.0, 1.0)
+
+    # ── 웨이브폼 링버퍼에 기록 ────────────────────────────
+    global _wave_buf_pos
+    n = min(frames, _WAVE_BUF_SIZE)
+    start = _wave_buf_pos
+    end   = start + n
+    if end <= _WAVE_BUF_SIZE:
+        _wave_buf[start:end] = outdata[:n, 0]
+    else:
+        split = _WAVE_BUF_SIZE - start
+        _wave_buf[start:] = outdata[:split, 0]
+        _wave_buf[:n - split] = outdata[split:n, 0]
+    _wave_buf_pos = end % _WAVE_BUF_SIZE
 
 
 # ══════════════════════════════════════════════════════════
@@ -228,8 +246,10 @@ TEXT_HI  = "#ddeeff"
 BTN_UNSEL = "#1e2d50"
 BTN_DIS   = "#131c30"
 
-GAUGE_W = 680   
+GAUGE_W = 680
 GAUGE_H = 380
+WAVE_W  = 640
+WAVE_H  = 120
 CX, CY  = GAUGE_W // 2, GAUGE_H - 20
 RADIUS  = 290
 
@@ -250,6 +270,7 @@ class LidSynthApp:
         self._prev_midi = None
         self._sensor    = LidSensor()
 
+        self._dbg_count = 0
         self._build_ui()
         self._start_threads()
 
@@ -295,6 +316,17 @@ class LidSynthApp:
         self._beat_canvas.pack()
         self._beat_dot = self._beat_canvas.create_oval(2, 2, 18, 18,
                                                         fill=BTN_UNSEL, outline="")
+
+        # ── 웨이브폼 디스플레이 ──
+        self._build_section("WAVEFORM", self.root)
+        self._wave_canvas = tk.Canvas(self.root, width=WAVE_W, height=WAVE_H,
+                                       bg="#0a0a14", highlightthickness=1,
+                                       highlightbackground=PANEL)
+        self._wave_canvas.pack(padx=20, pady=(0, 8))
+        # 중앙선 (무음 기준)
+        self._wave_canvas.create_line(0, WAVE_H // 2, WAVE_W, WAVE_H // 2,
+                                       fill="#1a2040", width=1, dash=(4, 4))
+        self._wave_tag = "waveform"
 
         # ── 구분선 ──
         tk.Frame(self.root, bg=PANEL, height=1).pack(fill="x", padx=20, pady=(0, 10))
@@ -531,7 +563,57 @@ class LidSynthApp:
             self.root.after(120, lambda: self._beat_canvas.itemconfig(
                 self._beat_dot, fill=BTN_UNSEL))
 
+        # ── 웨이브폼 그리기 ──────────────────────────────
+        buf_max = float(np.max(np.abs(_wave_buf)))
+        if self._dbg_count % 25 == 0:
+            import sys
+            print(f"[DBG] freq={freq:.1f} buf_max={buf_max:.4f} buf_pos={_wave_buf_pos}", file=sys.stderr, flush=True)
+        self._dbg_count += 1
+        self._draw_waveform(freq)
+
         self.root.after(40, self._update_ui)
+
+    # ── 웨이브폼 렌더링 ─────────────────────────────────────
+    def _draw_waveform(self, freq: float):
+        c = self._wave_canvas
+        c.delete("all")
+
+        mid = WAVE_H / 2
+
+        # 중앙 기준선
+        c.create_line(0, mid, WAVE_W, mid, fill="#888888", width=1, dash=(4, 4))
+
+        buf  = _wave_buf.copy()
+        pos  = _wave_buf_pos
+        wave = np.concatenate([buf[pos:], buf[:pos]])
+
+        # 주파수에 따라 보여줄 샘플 수 조절
+        if freq < 20:
+            samples = wave[-512:]
+        else:
+            cycles    = 3.0
+            per_cycle = SAMPLE_RATE / freq
+            n_samples = int(per_cycle * cycles)
+            n_samples = max(128, min(n_samples, _WAVE_BUF_SIZE))
+            samples   = wave[-n_samples:]
+
+        # 다운샘플링: 150 포인트
+        n_points = 150
+        indices  = np.linspace(0, len(samples) - 1, n_points, dtype=int)
+        samples  = samples[indices]
+
+        scale = mid - 4
+        x_arr = np.linspace(0, WAVE_W, n_points)
+        y_arr = mid - samples * scale
+
+        coords = []
+        for x, y in zip(x_arr, y_arr):
+            coords.append(float(x))
+            coords.append(float(y))
+
+        if len(coords) >= 4:
+            color = "#00cc88" if freq > 20 else "#666666"
+            c.create_line(coords, fill=color, width=2, smooth=True)
 
     def on_close(self):
         self._running = False
