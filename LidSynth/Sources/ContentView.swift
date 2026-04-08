@@ -118,7 +118,7 @@ struct ContentView: View {
             Image(systemName: "asterisk")
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(.white)
-            Text("jakdang.synth")
+            Text("hyn*thesizer")
                 .font(.system(size: 18, weight: .bold, design: .monospaced))
                 .foregroundColor(.white)
             Spacer()
