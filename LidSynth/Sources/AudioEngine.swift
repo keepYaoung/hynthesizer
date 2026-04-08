@@ -74,7 +74,7 @@ final class AudioEngine {
     private let scratchWave: UnsafeMutablePointer<Double>
     private var scratchPhase: Double = 0
     // System audio scratch buffer (~2 seconds)
-    private let scratchBufSize = 88200
+    private let scratchBufSize = 132300  // ~3 seconds at 44100
     private let scratchBuf: UnsafeMutablePointer<Float>
     private var scratchWritePos: Int = 0
     private var scratchReadPos: Double = 0
@@ -97,8 +97,8 @@ final class AudioEngine {
         scratchWave = .allocate(capacity: 2048)
         scratchWave.initialize(repeating: 0, count: 2048)
 
-        scratchBuf = .allocate(capacity: 88200)
-        scratchBuf.initialize(repeating: 0, count: 88200)
+        scratchBuf = .allocate(capacity: 132300)
+        scratchBuf.initialize(repeating: 0, count: 132300)
 
         harmonicsBuf = .allocate(capacity: 16)
         harmonicsBuf.initialize(repeating: 0, count: 16)
@@ -181,8 +181,9 @@ final class AudioEngine {
         scratchEnvLevel = 0
         scratchPhase = 0
         if m == .vinyl {
-            // Start reading ~23ms behind write position (minimal delay)
-            scratchReadPos = Double((scratchWritePos + scratchBufSize - 1024) % scratchBufSize)
+            // Start reading ~1s behind write position (middle of 3s buffer)
+            let wPos = systemAudio?.scratchWritePos ?? 0
+            scratchReadPos = Double((wPos + scratchBufSize - 44100) % scratchBufSize)
         }
     }
 
@@ -265,6 +266,9 @@ final class AudioEngine {
     // MARK: - Start / Stop
 
     func start() {
+        // Register scratch buffer with system audio capture for direct writes
+        systemAudio?.registerScratchBuffer(scratchBuf, size: scratchBufSize)
+
         let format = AVAudioFormat(standardFormatWithSampleRate: kSampleRate, channels: 1)!
 
         sourceNode = AVAudioSourceNode { [unowned self] _, _, frameCount, bufferList -> OSStatus in
@@ -324,48 +328,41 @@ final class AudioEngine {
             let envCoeff: Double = isScratching ? 0.3 : 0.015  // very fast attack, smooth tail
 
             if useSysAudio {
-                // ── System audio DJ mode ──
-                // Always capture into ring buffer
-                _ = systemAudio!.readSamples(into: sysBuf, count: frames)
-                for i in 0..<frames {
-                    scratchBuf[scratchWritePos] = sysBuf[i]
-                    scratchWritePos = (scratchWritePos + 1) % scratchBufSize
-                }
+                // ── System audio scratch (direct buffer, 3s stack) ──
+                // Capture callback fills scratchBuf continuously.
+                // Scratch: play from buffer. Not scratching: silence, readPos waits.
 
-                // Scratch envelope: smooth fade in/out to avoid clicks
-                let envTarget: Double = isScratching ? 1.0 : 0.0
-                let rate = isScratching ? scratchRate : 0.0
+                // Scratch: boost volume so scratch dominates over system audio
+                // Not scratching: silence (system audio plays through speakers)
+                let rate = scratchRate
 
-                for i in 0..<frames {
-                    // Smooth envelope (no clicks on start/stop)
-                    scratchEnvLevel += (envTarget - scratchEnvLevel) * 0.005
+                if isScratching {
+                    for i in 0..<frames {
+                        // Fade in quickly to avoid pop
+                        scratchEnvLevel += (1.0 - scratchEnvLevel) * 0.02
 
-                    // Always advance readPos (don't jump/reset)
-                    if isScratching {
                         scratchReadPos += rate
+                        while scratchReadPos < 0 { scratchReadPos += Double(scratchBufSize) }
+                        while scratchReadPos >= Double(scratchBufSize) { scratchReadPos -= Double(scratchBufSize) }
+
+                        let idx0 = Int(scratchReadPos) % scratchBufSize
+                        let idx1 = (idx0 + 1) % scratchBufSize
+                        let frac = scratchReadPos - floor(scratchReadPos)
+                        let sample = Double(scratchBuf[idx0]) * (1.0 - frac) + Double(scratchBuf[idx1]) * frac
+
+                        let out = sample * scratchEnvLevel * 4.0  // loud scratch
+                        data[i] = Float(max(-1.0, min(1.0, out)))
+                        waveBuf[(waveBufPos + i) % waveBufSize] = data[i]
                     }
-                    // When not scratching, readPos stays put (frozen, like lifting hand off record)
-
-                    while scratchReadPos < 0 { scratchReadPos += Double(scratchBufSize) }
-                    while scratchReadPos >= Double(scratchBufSize) { scratchReadPos -= Double(scratchBufSize) }
-
-                    // Only guard against overrunning write head when going forward
-                    if rate > 0 {
-                        let dist = Double((scratchWritePos - Int(scratchReadPos) + scratchBufSize) % scratchBufSize)
-                        if dist < 1024 {
-                            scratchReadPos = Double((scratchWritePos - 4096 + scratchBufSize) % scratchBufSize)
-                        }
+                } else {
+                    // Fade out smoothly, readPos frozen
+                    for i in 0..<frames {
+                        scratchEnvLevel *= 0.997
+                        let idx0 = Int(scratchReadPos) % scratchBufSize
+                        let sample = Double(scratchBuf[idx0]) * scratchEnvLevel * 4.0
+                        data[i] = Float(max(-1.0, min(1.0, sample)))
+                        waveBuf[(waveBufPos + i) % waveBufSize] = data[i]
                     }
-
-                    let idx0 = Int(scratchReadPos) % scratchBufSize
-                    let idx1 = (idx0 + 1) % scratchBufSize
-                    let frac = scratchReadPos - floor(scratchReadPos)
-                    let sample = Double(scratchBuf[idx0]) * (1.0 - frac) + Double(scratchBuf[idx1]) * frac
-
-                    let out = sample * scratchEnvLevel * vol * 3.0
-                    let clipped = Float(max(-1.0, min(1.0, out)))
-                    data[i] = clipped
-                    waveBuf[(waveBufPos + i) % waveBufSize] = clipped
                 }
             } else {
                 // ── Wavetable fallback: scratch instrument waveform ──

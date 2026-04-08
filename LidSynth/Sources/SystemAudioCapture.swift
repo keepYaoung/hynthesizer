@@ -30,6 +30,11 @@ final class SystemAudioCapture: NSObject, SCStreamOutput {
     private var writePos: Int = 0
     private var readPos: Int = 0
 
+    // Direct scratch buffer — capture callback writes here, AudioEngine reads directly
+    private var scratchBuf: UnsafeMutablePointer<Float>?
+    private var scratchBufSize: Int = 0
+    private(set) var scratchWritePos: Int = 0
+
     override init() {
         ringBuf = .allocate(capacity: 32768)
         ringBuf.initialize(repeating: 0, count: 32768)
@@ -105,6 +110,15 @@ final class SystemAudioCapture: NSObject, SCStreamOutput {
         isCapturing = false
     }
 
+    // MARK: - Scratch buffer registration
+
+    /// Register an external buffer for direct capture writes (used by Vinyl mode)
+    func registerScratchBuffer(_ buf: UnsafeMutablePointer<Float>, size: Int) {
+        scratchBuf = buf
+        scratchBufSize = size
+        scratchWritePos = 0
+    }
+
     // MARK: - Read samples (called from AudioEngine render thread)
 
     /// Read up to `count` samples from the ring buffer. Returns actual count read.
@@ -149,6 +163,14 @@ final class SystemAudioCapture: NSObject, SCStreamOutput {
         for i in 0..<sampleCount {
             ringBuf[writePos % bufSize] = floatPtr[i]
             writePos = (writePos + 1) % bufSize
+        }
+
+        // Also write directly to scratch buffer (no intermediate readSamples needed)
+        if let sBuf = scratchBuf, scratchBufSize > 0 {
+            for i in 0..<sampleCount {
+                sBuf[scratchWritePos] = floatPtr[i]
+                scratchWritePos = (scratchWritePos + 1) % scratchBufSize
+            }
         }
     }
 }

@@ -549,7 +549,7 @@ struct ContentView: View {
             currentVelocity = delta / 0.04  // approximate deg/s for display
 
             // Dead zone: ignore changes < 0.8° per tick (tremor filter)
-            if abs(delta) > 0.6 {
+            if abs(delta) > 0.3 {
                 // Map delta to scratch rate: 1° → 3.5x speed shift
                 let rate = delta * 0.15
                 audioEngine.setScratchRate(rate)
@@ -566,7 +566,7 @@ struct ContentView: View {
         if commandHeld && mode != .vinyl {
             let delta = angle - prevVinylAngle
             prevVinylAngle = angle
-            if abs(delta) > 0.6 {
+            if abs(delta) > 0.3 {
                 audioEngine.setScratchRate(delta * 0.15)
             } else {
                 audioEngine.setScratchRate(0)
