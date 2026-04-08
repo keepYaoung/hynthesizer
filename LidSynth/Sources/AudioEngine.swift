@@ -301,15 +301,16 @@ final class AudioEngine {
 
         // ── Vinyl mode: scratch ──
         if currentMode == .vinyl {
-            // Smooth scratch rate: fast attack, slow decay (natural vinyl feel)
+            // Smooth scratch rate: very fast attack, moderate decay
             let rateTarget = scratchRateTarget
-            let rateCoeff = abs(rateTarget) > abs(scratchRate) ? 0.3 : 0.05
+            let rateCoeff = abs(rateTarget) > abs(scratchRate) ? 0.5 : 0.08
             scratchRate += (rateTarget - scratchRate) * rateCoeff
 
             let useSysAudio = systemAudio?.isCapturing ?? false
             let isScratching = abs(scratchRate) > 0.01
-            let targetEnv: Double = isScratching ? 1.0 : 0.0
-            let envCoeff: Double = isScratching ? 0.15 : 0.008  // slower release for continuity
+            // Min envelope 0.3 so sound starts strong, max 1.0 when scratching
+            let targetEnv: Double = isScratching ? 1.0 : 0.3
+            let envCoeff: Double = isScratching ? 0.25 : 0.012  // fast attack, smooth tail
 
             if useSysAudio {
                 // ── System audio scratch: DJ-style record scrubbing ──
@@ -507,8 +508,8 @@ final class AudioEngine {
             // Scratch overlay (Command key held): mix scratched system audio on top
             var scratchSample: Double = 0
             if shouldMixSys {
-                // Smooth scratch rate
-                let rCoeff = abs(scratchRateTarget) > abs(scratchRate) ? 0.3 : 0.05
+                // Smooth scratch rate: fast attack, moderate decay
+                let rCoeff = abs(scratchRateTarget) > abs(scratchRate) ? 0.5 : 0.08
                 scratchRate += (scratchRateTarget - scratchRate) * rCoeff
 
                 if abs(scratchRate) > 0.001 || abs(scratchRateTarget) > 0.001 {
