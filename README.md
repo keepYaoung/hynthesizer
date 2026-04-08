@@ -1,4 +1,4 @@
-# LidSynth (JakdangSynth)
+# hyn*thesizer
 
 맥북 덮개 각도로 연주하는 신디사이저.
 
@@ -44,22 +44,11 @@ ScreenCaptureKit으로 맥에서 재생 중인 음악을 캡처하여 믹싱.
 
 - macOS 14.0+
 - Swift 5.9+
-- Python 3.9+ (센서 브릿지용)
-
-### Python 의존성 (센서)
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install pybooklid numpy sounddevice
-```
 
 ### macOS 권한
 - **화면 녹화** - 시스템 오디오 캡처 시 필요 (시스템 설정 > 개인정보 보호 > 화면 녹화)
 
 ## 빌드 및 실행
-
-### Swift (macOS 네이티브)
 
 ```bash
 cd LidSynth
@@ -67,17 +56,10 @@ swift build
 .build/debug/LidSynth
 ```
 
-### Python (레거시)
-
-```bash
-source .venv/bin/activate
-python3 lid_synth.py
-```
-
 ## 구조
 
 ```
-lid-synth/
+hynthesizer/
 ├── lid_synth.py                 # Python 원본 (tkinter)
 ├── LidSynth/                    # Swift macOS 앱
 │   ├── Package.swift
@@ -89,7 +71,7 @@ lid-synth/
 │       ├── GaugeView.swift      # 반원형 게이지
 │       ├── AudioEngine.swift    # 가법 합성 + ADSR + 믹싱
 │       ├── MIDIEngine.swift     # CoreMIDI 가상 포트
-│       ├── LidSensor.swift      # pybooklid 브릿지
+│       ├── LidSensor.swift      # IOKit HID 네이티브 센서
 │       ├── SystemAudioCapture.swift  # ScreenCaptureKit
 │       └── Models.swift         # 상수, 음계, 악기, 유틸
 └── README.md

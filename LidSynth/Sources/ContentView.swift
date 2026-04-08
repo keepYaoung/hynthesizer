@@ -46,6 +46,7 @@ struct ContentView: View {
             audioEngine.systemAudio = systemAudio
             audioEngine.start()
             Task { await systemAudio.start() }
+
         }
         .onDisappear {
             audioEngine.stop()
