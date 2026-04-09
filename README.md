@@ -84,6 +84,11 @@ hynthesizer/
 └── README.md
 ```
 
+## Acknowledgments
+
+Inspired by [lid-synth](https://github.com/dogoyster/lid-synth) by dogoyster.
+Rebuilt from scratch in Swift/SwiftUI as a native macOS app with real-time audio synthesis, vinyl scratching, and MIDI output.
+
 ## License
 
 MIT
