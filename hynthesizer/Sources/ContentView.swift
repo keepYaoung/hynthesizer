@@ -40,7 +40,7 @@ struct ContentView: View {
     @State private var prevVinylAngle: Double = 90
     @State private var currentVelocity: Double = 0
     @State private var sourceActive: Bool = false
-    @State private var vinylState: ScratchState = .playing
+    @State private var vinylState: ScratchState = .scratching
     @State private var stillTickCount: Int = 0
     private let kScratchReleaseTicks = 3  // 120ms debounce
     @State private var commandHeld = false
@@ -84,6 +84,7 @@ struct ContentView: View {
                     audioEngine.setScratchRate(0)
                 } else if !cmdDown && commandHeld {
                     commandHeld = false
+                    prevVinylAngle = currentAngle  // Bug 2: prevent phantom delta
                     if let prev = modeBeforeCommand {
                         audioEngine.setMixSystemAudio(prev == .vinyl)
                         modeBeforeCommand = nil
@@ -112,7 +113,7 @@ struct ContentView: View {
             prevMidi = nil
             prevVinylAngle = currentAngle
             isPlaying = false
-            vinylState = .playing
+            vinylState = .scratching
             stillTickCount = 0
             // Vinyl and Filter modes use system audio
             audioEngine.setMixSystemAudio(val == .vinyl || val == .filter)
@@ -719,10 +720,11 @@ struct ContentView: View {
     private func selectAudioSource(_ source: AudioSource) {
         audioSource = source
         isPlaying = false
-        vinylState = .playing
+        vinylState = .scratching
         stillTickCount = 0
         audioEngine.setScratchState(.scratching)
         audioEngine.setScratchAdvance(0)
+        audioEngine.resetPlayPosition()
         Task { await audioSourceManager.switchSource(source) }
     }
 
@@ -740,7 +742,12 @@ struct ContentView: View {
             do {
                 try audioSourceManager.loadFile(url: url)
                 loadedFileName = url.lastPathComponent
-                // Auto-switch to file source and start playback
+                // Reset playback state for new file
+                isPlaying = false
+                vinylState = .scratching
+                audioEngine.setScratchState(.scratching)
+                audioEngine.setScratchAdvance(0)
+                audioEngine.resetPlayPosition()
                 if audioSource != .file {
                     audioSource = .file
                 }
@@ -822,6 +829,7 @@ struct ContentView: View {
             let delta = angle - prevVinylAngle
             prevVinylAngle = angle
             currentVelocity = delta / 0.04  // deg/s for display
+            currentFreq = 0  // vinyl doesn't use freq display
 
             if abs(delta) > kVinylDeadZone && isPlaying {
                 // Hinge moving + playing → SCRATCHING: playhead follows hand

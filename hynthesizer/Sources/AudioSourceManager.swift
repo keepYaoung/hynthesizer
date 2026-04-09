@@ -5,8 +5,14 @@ import Darwin  // OSMemoryBarrier
 /// Wraps SystemAudioCapture, file playback, and microphone recording
 /// behind a single buffer interface identical to SystemAudioCapture.
 final class AudioSourceManager: NSObject {
-    private(set) var isCapturing = false
+    private var _isCapturing = false
     private(set) var currentSource: AudioSource = .system
+
+    /// Live capturing status — proxies to system audio when active
+    var isCapturing: Bool {
+        if currentSource == .system { return systemAudio.isCapturing }
+        return _isCapturing
+    }
 
     // MARK: - Ring buffer for mic (same pattern as SystemAudioCapture)
     private let bufSize = 32768
@@ -17,7 +23,16 @@ final class AudioSourceManager: NSObject {
     // Direct scratch buffer (registered by AudioEngine)
     private var scratchBuf: UnsafeMutablePointer<Float>?
     private var scratchBufSize: Int = 0
-    private(set) var scratchWritePos: Int = 0
+    private var _scratchWritePos: Int = 0
+
+    /// Live write position — proxies to active source's counter
+    var scratchWritePos: Int {
+        switch currentSource {
+        case .system: return systemAudio.scratchWritePos
+        case .mic:    return _scratchWritePos
+        case .file:   return 0
+        }
+    }
 
     // MARK: - System audio
     let systemAudio = SystemAudioCapture()
@@ -124,7 +139,7 @@ final class AudioSourceManager: NSObject {
         switch source {
         case .system:
             await systemAudio.start()
-            isCapturing = systemAudio.isCapturing
+            _isCapturing = systemAudio.isCapturing
         case .file:
             startFilePlayback()
         case .mic:
@@ -141,7 +156,7 @@ final class AudioSourceManager: NSObject {
         case .mic:
             stopMicrophone()
         }
-        isCapturing = false
+        _isCapturing = false
     }
 
     private func clearBuffers() {
@@ -150,7 +165,7 @@ final class AudioSourceManager: NSObject {
         for i in 0..<bufSize { ringBuf[i] = 0 }
         if let sBuf = scratchBuf {
             for i in 0..<scratchBufSize { sBuf[i] = 0 }
-            scratchWritePos = 0
+            _scratchWritePos = 0
         }
     }
 
@@ -168,13 +183,13 @@ final class AudioSourceManager: NSObject {
 
         // Write to scratch buffer
         if let sBuf = scratchBuf, scratchBufSize > 0 {
-            var sp = scratchWritePos
+            var sp = _scratchWritePos
             for i in 0..<count {
                 sBuf[sp] = samples[i]
                 sp = (sp + 1) % scratchBufSize
             }
             OSMemoryBarrier()
-            scratchWritePos = sp
+            _scratchWritePos = sp
         }
     }
 
@@ -259,11 +274,11 @@ final class AudioSourceManager: NSObject {
     private func startFilePlayback() {
         guard filePCMLength > 0 else {
             fputs("[File] No file loaded\n", stderr)
-            isCapturing = false
+            _isCapturing = false
             return
         }
         fileReadPos = 0
-        isCapturing = true
+        _isCapturing = true
         fputs("[File] Playback started: \(loadedFileName ?? "?") (\(filePCMLength) samples)\n", stderr)
     }
 
@@ -280,26 +295,26 @@ final class AudioSourceManager: NSObject {
 
         guard hwFormat.sampleRate > 0 else {
             fputs("[Mic] No audio input available\n", stderr)
-            isCapturing = false
+            _isCapturing = false
             return
         }
 
         let monoFormat = AVAudioFormat(standardFormatWithSampleRate: kSampleRate, channels: 1)!
 
-        // Install tap on input
+        // Create converter once (not inside callback)
+        let needsConversion = !(hwFormat.sampleRate == kSampleRate && hwFormat.channelCount == 1)
+        let micConverter = needsConversion ? AVAudioConverter(from: hwFormat, to: monoFormat) : nil
+        let ratio = kSampleRate / hwFormat.sampleRate
+        let maxOutFrames = AVAudioFrameCount(Double(1024) * ratio) + 64
+
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: hwFormat) { [weak self] buffer, _ in
             guard let self else { return }
-            // Convert to mono 44100 if needed
-            if hwFormat.sampleRate == kSampleRate && hwFormat.channelCount == 1 {
+            if !needsConversion {
                 if let data = buffer.floatChannelData?[0] {
                     self.writeSamplesToBuffers(data, count: Int(buffer.frameLength))
                 }
-            } else {
-                guard let converter = AVAudioConverter(from: hwFormat, to: monoFormat) else { return }
-                let ratio = kSampleRate / hwFormat.sampleRate
-                let outFrames = AVAudioFrameCount(Double(buffer.frameLength) * ratio)
-                guard let outBuf = AVAudioPCMBuffer(pcmFormat: monoFormat, frameCapacity: outFrames) else { return }
-
+            } else if let converter = micConverter {
+                guard let outBuf = AVAudioPCMBuffer(pcmFormat: monoFormat, frameCapacity: maxOutFrames) else { return }
                 var isDone = false
                 let inputBlock: AVAudioConverterInputBlock = { _, outStatus -> AVAudioBuffer? in
                     if isDone {
@@ -322,11 +337,11 @@ final class AudioSourceManager: NSObject {
             try engine.start()
             micEngine = engine
             isMicRecording = true
-            isCapturing = true
+            _isCapturing = true
             fputs("[Mic] Recording started (format: \(hwFormat))\n", stderr)
         } catch {
             fputs("[Mic] Failed to start: \(error)\n", stderr)
-            isCapturing = false
+            _isCapturing = false
         }
     }
 

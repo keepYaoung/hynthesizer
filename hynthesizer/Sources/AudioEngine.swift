@@ -152,6 +152,11 @@ final class AudioEngine {
     func setScratchRate(_ rate: Double) { scratchRateTarget = rate }
     func setScratchState(_ state: ScratchState) { scratchState = state }
     func setScratchAdvance(_ advance: Double) { scratchAdvance = advance }
+    func resetPlayPosition() {
+        filePlayPos = 0
+        scratchReadPos = 0
+        scratchEnvLevel = 0
+    }
 
     /// 힌지 각도로 필터 cutoff 설정 (0°=200Hz, 180°=20kHz, 로그 스케일)
     func setFilterAngle(_ angle: Double) {
@@ -216,6 +221,10 @@ final class AudioEngine {
         scratchState = .scratching
         scratchAdvance = 0
         filePlayPos = 0
+        scratchReadPos = 0
+        // Reset percussion
+        percTriggered = false
+        percSamplePos = 0
         if m == .filter {
             // Reset filter sweep state
             fsX1 = 0; fsX2 = 0; fsY1 = 0; fsY2 = 0
@@ -607,6 +616,8 @@ final class AudioEngine {
                     if percSamplePos < maxLen {
                         synthSample = percSample(pos: percSamplePos, type: percType, vol: vol)
                         percSamplePos += 1
+                    } else {
+                        percTriggered = false
                     }
                 }
             } else if active {
