@@ -2,6 +2,7 @@ import Foundation
 import ScreenCaptureKit
 import AVFoundation
 import CoreGraphics
+import Darwin  // OSMemoryBarrier
 
 /// Async timeout helper
 private func withTimeout<T>(seconds: Double, operation: @escaping () async throws -> T) async throws -> T {
@@ -123,6 +124,7 @@ final class SystemAudioCapture: NSObject, SCStreamOutput {
 
     /// Read up to `count` samples from the ring buffer. Returns actual count read.
     func readSamples(into buffer: UnsafeMutablePointer<Float>, count: Int) -> Int {
+        OSMemoryBarrier()  // Ensure we see latest writePos from capture thread
         var read = 0
         while read < count {
             let available = (writePos - readPos + bufSize) % bufSize
@@ -160,17 +162,25 @@ final class SystemAudioCapture: NSObject, SCStreamOutput {
         let floatPtr = UnsafeRawPointer(ptr).assumingMemoryBound(to: Float.self)
         let sampleCount = length / MemoryLayout<Float>.size
 
+        // Batch write: copy samples first, then update position with memory barrier
+        // (SPSC ring buffer — capture thread writes, audio thread reads)
+        var wp = writePos
         for i in 0..<sampleCount {
-            ringBuf[writePos % bufSize] = floatPtr[i]
-            writePos = (writePos + 1) % bufSize
+            ringBuf[wp % bufSize] = floatPtr[i]
+            wp = (wp + 1) % bufSize
         }
+        OSMemoryBarrier()
+        writePos = wp
 
         // Also write directly to scratch buffer (no intermediate readSamples needed)
         if let sBuf = scratchBuf, scratchBufSize > 0 {
+            var sp = scratchWritePos
             for i in 0..<sampleCount {
-                sBuf[scratchWritePos] = floatPtr[i]
-                scratchWritePos = (scratchWritePos + 1) % scratchBufSize
+                sBuf[sp] = floatPtr[i]
+                sp = (sp + 1) % scratchBufSize
             }
+            OSMemoryBarrier()
+            scratchWritePos = sp
         }
     }
 }

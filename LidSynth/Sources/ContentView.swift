@@ -505,7 +505,7 @@ struct ContentView: View {
             midiEngine.sendAngleAsCC(angle, controller: midiCC)
 
         case .scale, .rhythm:
-            if let midi = angleToMidi(angle, scale: scaleType) {
+            if let midi = angleToMidiFader(angle, scale: scaleType, prevMidi: prevMidi) {
                 let freq = midiToFreq(midi)
                 audioEngine.setTargetFreq(freq)
                 currentFreq = freq
@@ -549,7 +549,7 @@ struct ContentView: View {
             currentVelocity = delta / 0.04  // approximate deg/s for display
 
             // Dead zone: ignore changes < 0.8° per tick (tremor filter)
-            if abs(delta) > 0.3 {
+            if abs(delta) > kVinylDeadZone {
                 // Map delta to scratch rate: 1° → 3.5x speed shift
                 let rate = delta * 0.15
                 audioEngine.setScratchRate(rate)
@@ -566,7 +566,7 @@ struct ContentView: View {
         if commandHeld && mode != .vinyl {
             let delta = angle - prevVinylAngle
             prevVinylAngle = angle
-            if abs(delta) > 0.3 {
+            if abs(delta) > kVinylDeadZone {
                 audioEngine.setScratchRate(delta * 0.15)
             } else {
                 audioEngine.setScratchRate(0)

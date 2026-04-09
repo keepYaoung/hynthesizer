@@ -338,8 +338,8 @@ final class AudioEngine {
 
                 if isScratching {
                     for i in 0..<frames {
-                        // Fade in quickly to avoid pop
-                        scratchEnvLevel += (1.0 - scratchEnvLevel) * 0.02
+                        // Fast attack envelope (matches wavetable scratch path)
+                        scratchEnvLevel += (1.0 - scratchEnvLevel) * 0.3
 
                         scratchReadPos += rate
                         while scratchReadPos < 0 { scratchReadPos += Double(scratchBufSize) }
@@ -534,9 +534,14 @@ final class AudioEngine {
                     while scratchReadPos < 0 { scratchReadPos += Double(scratchBufSize) }
                     while scratchReadPos >= Double(scratchBufSize) { scratchReadPos -= Double(scratchBufSize) }
 
+                    // Gradually decelerate as readPos approaches writePos to avoid hard jump
                     let dist = Double((scratchWritePos - Int(scratchReadPos) + scratchBufSize) % scratchBufSize)
-                    if dist < 512 && overlayRate > 0 {
-                        scratchReadPos = Double((scratchWritePos - 1024 + scratchBufSize) % scratchBufSize)
+                    if dist < 1024 && overlayRate > 0 {
+                        let fade = max(0, (dist - 256) / 768.0)  // 1.0 at 1024, 0.0 at 256
+                        scratchReadPos -= overlayRate  // undo the advance above
+                        scratchReadPos += overlayRate * fade  // re-advance with deceleration
+                        while scratchReadPos < 0 { scratchReadPos += Double(scratchBufSize) }
+                        while scratchReadPos >= Double(scratchBufSize) { scratchReadPos -= Double(scratchBufSize) }
                     }
 
                     let si0 = Int(scratchReadPos) % scratchBufSize

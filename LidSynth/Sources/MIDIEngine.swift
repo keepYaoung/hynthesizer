@@ -9,7 +9,7 @@ final class MIDIEngine {
 
     // State tracking
     private var lastNote: UInt8? = nil
-    private var lastCC: UInt8 = 255
+    private var lastCCValues: [UInt8: UInt8] = [:]
     private var enabled = false
 
     private let channel: UInt8 = 0
@@ -63,8 +63,8 @@ final class MIDIEngine {
 
     func sendCC(controller: UInt8, value: UInt8) {
         guard isSetup, enabled else { return }
-        if controller == 1 && value == lastCC { return }
-        if controller == 1 { lastCC = value }
+        if lastCCValues[controller] == value { return }
+        lastCCValues[controller] = value
         sendRaw(status: 0xB0 | channel, data1: controller, data2: value)
     }
 
@@ -72,24 +72,6 @@ final class MIDIEngine {
         let clamped = max(0, min(180, angle))
         let value = UInt8(clamped / 180.0 * 127.0)
         sendCC(controller: controller, value: value)
-    }
-
-    func sendAngleAsNote(_ angle: Double, scale: ScaleType) {
-        guard let midi = angleToMidi(angle, scale: scale) else {
-            sendNoteOff()
-            return
-        }
-        let note = UInt8(clamping: midi)
-        if lastNote != note {
-            sendNoteOn(note)
-        }
-    }
-
-    func sendPitchBend(value: UInt16) {
-        guard isSetup, enabled else { return }
-        let lsb = UInt8(value & 0x7F)
-        let msb = UInt8((value >> 7) & 0x7F)
-        sendRaw(status: 0xE0 | channel, data1: lsb, data2: msb)
     }
 
     func allNotesOff() {

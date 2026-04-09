@@ -76,7 +76,8 @@ enum EnvPhase {
 
 // MARK: - Fader / Vinyl Constants
 let kFaderHysteresis: Double = 2.0        // degrees of dead zone at note boundaries
-let kVinylVelocityThreshold: Double = 15.0 // deg/s minimum to produce scratch sound
+let kVinylDeadZone: Double = 0.3              // degrees per tick (40ms) — tremor filter
+let kVinylVelocityThreshold: Double = 7.5     // deg/s display threshold (= deadZone / 0.04)
 
 // MARK: - Velocity Tracker (for Vinyl mode)
 
