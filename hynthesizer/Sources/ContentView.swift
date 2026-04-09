@@ -24,7 +24,6 @@ struct ContentView: View {
     @State private var midiCC: UInt8 = 1
 
     @State private var prevMidi: Int? = nil
-    @State private var showVinylTip = true
 
     // Filter mode
     @State private var filterType: FilterType = .lowPass
@@ -43,8 +42,6 @@ struct ContentView: View {
     @State private var vinylState: ScratchState = .scratching
     @State private var stillTickCount: Int = 0
     private let kScratchReleaseTicks = 3  // 120ms debounce
-    @State private var commandHeld = false
-    @State private var modeBeforeCommand: SynthMode? = nil
     @State private var eventMonitor: Any? = nil
 
     private let audioEngine = AudioEngine()
@@ -70,28 +67,7 @@ struct ContentView: View {
             audioEngine.start()
             Task { await audioSourceManager.start() }
 
-            // Command key hold → overlay vinyl scratch on top of current mode
-            guard eventMonitor == nil else { return }
-            eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
-                // Command overlay only works in non-vinyl modes
-                guard mode != .vinyl && mode != .filter else { return event }
-                let cmdDown = event.modifierFlags.contains(.command)
-                if cmdDown && !commandHeld {
-                    commandHeld = true
-                    modeBeforeCommand = mode
-                    prevVinylAngle = currentAngle
-                    audioEngine.setMixSystemAudio(true)
-                    audioEngine.setScratchRate(0)
-                } else if !cmdDown && commandHeld {
-                    commandHeld = false
-                    prevVinylAngle = currentAngle  // Bug 2: prevent phantom delta
-                    if let prev = modeBeforeCommand {
-                        audioEngine.setMixSystemAudio(prev == .vinyl)
-                        modeBeforeCommand = nil
-                    }
-                }
-                return event
-            }
+            // (Command key overlay removed)
         }
         .onDisappear {
             audioEngine.stop()
@@ -289,29 +265,6 @@ struct ContentView: View {
                 modeButton(L10n.modeFilter, icon: "line.3.horizontal.decrease", mode: .filter)
             }
 
-            // Tip: show vinyl overlay hint when in non-vinyl modes
-            if mode != .vinyl && showVinylTip {
-                HStack(spacing: 5) {
-                    Image(systemName: "info.circle.fill")
-                        .font(.system(size: 9))
-                        .foregroundColor(.cyan.opacity(0.7))
-                    Text(L10n.vinylOverlayTip)
-                        .font(.system(size: 9))
-                        .foregroundColor(.cyan.opacity(0.6))
-                    Spacer()
-                    Button {
-                        showVinylTip = false
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 8))
-                            .foregroundColor(.gray)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(RoundedRectangle(cornerRadius: 4).fill(.cyan.opacity(0.06)))
-            }
         }
         .padding(.bottom, 12)
     }
@@ -854,17 +807,6 @@ struct ContentView: View {
             // MIDI CC
             let ccVal = UInt8(min(127, abs(delta) / 5.0 * 127.0))
             midiEngine.sendCC(controller: midiCC, value: ccVal)
-        }
-
-        // Command held overlay: scratch on top of current mode
-        if commandHeld && mode != .vinyl {
-            let delta = angle - prevVinylAngle
-            prevVinylAngle = angle
-            if abs(delta) > kVinylDeadZone {
-                audioEngine.setScratchRate(delta * 0.15)
-            } else {
-                audioEngine.setScratchRate(0)
-            }
         }
 
         currentNote = freqToNote(currentFreq)
