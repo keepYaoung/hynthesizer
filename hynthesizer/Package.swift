@@ -2,11 +2,11 @@
 import PackageDescription
 
 let package = Package(
-    name: "LidSynth",
+    name: "hynthesizer",
     platforms: [.macOS(.v14)],
     targets: [
         .executableTarget(
-            name: "LidSynth",
+            name: "hynthesizer",
             path: "Sources",
             linkerSettings: [
                 .linkedFramework("AVFoundation"),

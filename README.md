@@ -1,10 +1,10 @@
-# hyn*thesizer
+# hynthesizer
 
 A synthesizer you play by opening and closing your MacBook lid.
 
 Tilt the hinge to change pitch, spin a virtual vinyl record, scratch system audio, and apply filters — all controlled by the lid angle.
 
-<img src="src/hynthesizer.png" width="480">
+![hynthesizer](src/hynthesizer.png)
 
 ## Features
 
@@ -27,7 +27,7 @@ Tilt the hinge to change pitch, spin a virtual vinyl record, scratch system audi
 - Velocity indicator with direction and spark effects
 
 ### MIDI Output
-Creates a virtual MIDI port "LidSynth" recognized by any DAW (Ableton, Logic, GarageBand, etc.).
+Creates a virtual MIDI port "hynthesizer" recognized by any DAW (Ableton, Logic, GarageBand, etc.).
 - Note On/Off (Scale / Rhythm / Pitch Fader modes)
 - CC messages (Mod Wheel / Volume / Expression / Filter) with deduplication
 - Hinge angle mapped to MIDI CC values (0–127)
@@ -58,9 +58,9 @@ Captures audio playing on your Mac via ScreenCaptureKit.
 ## Build & Run
 
 ```bash
-cd LidSynth
+cd hynthesizer
 swift build
-.build/debug/LidSynth
+.build/debug/hynthesizer
 ```
 
 ## Project Structure
@@ -68,10 +68,10 @@ swift build
 ```
 hynthesizer/
 ├── lid_synth.py                     # Original Python prototype (tkinter)
-├── LidSynth/                        # Swift macOS app
+├── hynthesizer/                     # Swift macOS app
 │   ├── Package.swift
 │   └── Sources/
-│       ├── LidSynthApp.swift        # App entry point
+│       ├── hynthesizerApp.swift     # App entry point
 │       ├── ContentView.swift        # Main UI + mode logic
 │       ├── VinylView.swift          # Vinyl disc + tone arm animation
 │       ├── WaveformView.swift       # Real-time waveform display

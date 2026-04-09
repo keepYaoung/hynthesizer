@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct LidSynthApp: App {
+struct hynthesizerApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()

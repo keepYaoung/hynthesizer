@@ -1,7 +1,7 @@
 import CoreMIDI
 import Foundation
 
-/// Virtual MIDI source — DAW에서 "LidSynth" 포트로 인식됨.
+/// Virtual MIDI source — DAW에서 "hynthesizer" 포트로 인식됨.
 final class MIDIEngine {
     private var client = MIDIClientRef()
     private var source = MIDIEndpointRef()
@@ -21,7 +21,7 @@ final class MIDIEngine {
     // MARK: - Setup
 
     private func setup() {
-        var status = MIDIClientCreateWithBlock("LidSynth.client" as CFString, &client) { _ in }
+        var status = MIDIClientCreateWithBlock("hynthesizer.client" as CFString, &client) { _ in }
         guard status == noErr else {
             fputs("[MIDI] Client creation failed: \(status)\n", stderr)
             return
@@ -29,7 +29,7 @@ final class MIDIEngine {
 
         status = MIDISourceCreateWithProtocol(
             client,
-            "LidSynth" as CFString,
+            "hynthesizer" as CFString,
             ._1_0,
             &source
         )
@@ -39,7 +39,7 @@ final class MIDIEngine {
         }
 
         isSetup = true
-        fputs("[MIDI] Virtual source 'LidSynth' created\n", stderr)
+        fputs("[MIDI] Virtual source 'hynthesizer' created\n", stderr)
     }
 
     // MARK: - Public
