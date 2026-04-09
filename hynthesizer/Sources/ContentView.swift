@@ -58,6 +58,7 @@ struct ContentView: View {
             Task { await systemAudio.start() }
 
             // Command key hold → overlay vinyl scratch on top of current mode
+            guard eventMonitor == nil else { return }
             eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
                 // Command overlay only works in non-vinyl modes
                 guard mode != .vinyl else { return event }
@@ -488,7 +489,6 @@ struct ContentView: View {
     private func tick() {
         let angle: Double
         if sensor.sensorAvailable {
-            sensor.poll()
             angle = sensor.angle
         } else {
             angle = demoAngle

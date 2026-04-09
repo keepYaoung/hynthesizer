@@ -1,4 +1,5 @@
 import AVFoundation
+import Darwin  // OSMemoryBarrier
 import Foundation
 
 final class AudioEngine {
@@ -146,6 +147,7 @@ final class AudioEngine {
         let count = min(h.count, maxHarmonics)
         for i in 0..<count { harmonicsBuf[i] = h[i] }
         for i in count..<maxHarmonics { harmonicsBuf[i] = 0 }
+        OSMemoryBarrier()
         harmonicsCount = count
         rebuildScratchWave()
     }

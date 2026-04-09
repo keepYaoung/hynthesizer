@@ -35,10 +35,6 @@ final class LidSensor {
 
     var angle: Double { currentAngle }
 
-    func poll() {
-        // currentAngle is updated by the background polling thread
-    }
-
     func setAngle(_ a: Double) {
         currentAngle = max(0, min(180, a))
     }
