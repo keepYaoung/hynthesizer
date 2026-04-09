@@ -4,6 +4,8 @@ A synthesizer you play by opening and closing your MacBook lid.
 
 Tilt the hinge to change pitch, spin a virtual vinyl record, scratch system audio, and apply filters — all controlled by the lid angle.
 
+![hynthesizer](src/hynthesizer.png)
+
 ## Features
 
 ### 5 Performance Modes
